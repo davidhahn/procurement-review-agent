@@ -10,7 +10,7 @@ The central question:
 
 ## 1. Example workflow
 
-**Planned behavior — procurement analysis is not implemented yet.**
+**The example below now runs locally with fixture analysis and two demo policy rules. General request analysis remains planned.**
 
 An employee submits:
 
@@ -37,23 +37,27 @@ The model's interpretation is an input to the policy evaluator. It cannot overri
 
 ## 3. Architecture
 
-The planned request flow is:
+The local request flow is:
 
 ```text
 Request → Structured analysis → Policy evaluation → Recommendation / Human review
 ```
 
-A FastAPI backend will coordinate the workflow. The first working version will use predefined fixture analysis and local policy files so the decision path can be exercised without a model call.
+A FastAPI backend coordinates the workflow. The current version recognizes one example, returns predefined structured analysis, and evaluates two rules in Python without a model call. Separate policy files will follow when the rules expand.
 
 Later, an LLM will replace the fixture analysis and return the same structured output. The deterministic policy evaluator and API contract will remain in place.
 
 ## 4. Current status
 
-The repository currently contains a minimal FastAPI app with a working `/health` endpoint and generated API documentation.
+The backend exposes `/health` and `POST /requests/analyze`. The Acme Analytics fixture returns `requires_review`, routes to a manager and security reviewer, and asks for clarification of the uploaded data.
 
-**Next milestone:** one complete fixture-based procurement review, from a submitted request to a response containing the analysis, applicable rules, and required next step.
+Two illustrative rules drive that result: annual cost over $1,000 requires manager review (`DEMO-SPEND-1`); external data uploads require security review (`DEMO-DATA-1`). These are demo assumptions, not a real company's policies. No purchase or approval is executed.
 
-Policy evaluation, LLM analysis, and a human review interface are not implemented yet.
+Only the exact sample text (ignoring surrounding whitespace) is supported. Other requests return HTTP 422. There is no LLM, database, or human review interface yet.
+
+**Next milestone:** add a second, lower-cost example with no external data upload to exercise the other decision path.
+
+See [the day-one checklist and run notes](docs/day-one.md).
 
 ## 5. Local setup
 
@@ -79,3 +83,32 @@ Expected response:
 ```
 
 No API keys, environment variables, or database are required. `.env.example` is a placeholder for future configuration.
+
+### Run the procurement example
+
+With the server running, open another terminal at the repository root:
+
+```sh
+curl -sS http://127.0.0.1:8000/requests/analyze \
+  -H 'Content-Type: application/json' \
+  --data-binary @examples/acme-request.json
+```
+
+Expected: `status: "requires_review"`, with `manager` and `security` in `required_reviewers`, both demo rule IDs, and a question about data anonymization.
+
+Check an unsupported request:
+
+```sh
+curl -i http://127.0.0.1:8000/requests/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"request_text":"Buy another tool"}'
+```
+
+Expected: HTTP 422 with an explanation that only the Acme Analytics example is supported.
+
+### Run the checks
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
